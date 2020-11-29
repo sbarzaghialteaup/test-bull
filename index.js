@@ -1,5 +1,4 @@
 const Queue = require("bull");
-const { log } = require("console");
 
 const os = require("os");
 
@@ -42,12 +41,18 @@ function calculateUsedCPU(usedTime) {
     return totalCpu / CPUsUsage.length;
 }
 
-function start() {
-    console.log(`Counting up to ${job.data.count} with ${PARALLEL_JOBS} parallel jobs`);
+function start(job, PARALLEL_JOBS, useThreads) {
+    if (useThreads) {
+        console.log(
+            `Counting up to ${job.data.count} with ${PARALLEL_JOBS} parallel jobs with threads`
+        );
+    } else {
+        console.log(`Counting up to ${job.data.count} with ${PARALLEL_JOBS} parallel jobs`);
+    }
     startTimer();
 }
 
-function end() {
+function end(PARALLEL_JOBS) {
     const usedTime = getSecondsFromStart();
     endCpuUsage = os.cpus();
     const avgCPU = calculateUsedCPU(usedTime);
@@ -63,15 +68,16 @@ async function main(PARALLEL_JOBS, useThreads) {
     console.log(`CPU Speed: ${os.cpus()[0].speed}MHz`);
     console.log();
 
-    if (useThreads === "x") {
+    if (useThreads) {
         videoQueue.process(PARALLEL_JOBS, "/home/sbarzaghi/test/test-bull/processor.js");
 
         videoQueue.on("completed", (job, result) => {
             if (result.started) {
-                start();
+                start(job, PARALLEL_JOBS, useThreads);
             }
             if (result.finished) {
-                end();
+                count = job.data.count;
+                end(PARALLEL_JOBS);
             }
         });
     } else {
@@ -79,13 +85,13 @@ async function main(PARALLEL_JOBS, useThreads) {
             count += 1;
             done();
             if (startTime === 0) {
-                start();
+                start(job, PARALLEL_JOBS, useThreads);
             }
             if (count === job.data.count) {
-                end;
+                end(PARALLEL_JOBS);
             }
         });
     }
 }
 
-main(Number(process.argv[2]), process.argv[3]);
+main(Number(process.argv[2]), process.argv[3] === "x");

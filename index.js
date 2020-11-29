@@ -19,21 +19,18 @@ function getSecondsFromStart() {
     return now - startTime;
 }
 
-videoQueue.process(8, (job, done) => {
-    // console.log(`done ${job.data.index}`);
+const PARALLEL_JOBS = 8;
+videoQueue.process(PARALLEL_JOBS, (job, done) => {
     if (startTime === 0) {
         startTimer();
     }
     count += 1;
     done();
-});
-
-// Will listen globally, to instances of this queue...
-videoQueue.on("global:drained", async () => {
-    const delayed = await videoQueue.getDelayedCount();
-    if (startTime > 0 && delayed === 0) {
+    if (count === job.data.count) {
         const usedTime = getSecondsFromStart();
-        console.log(`Count ${count} ${usedTime.toLocaleString()} milliseconds`);
+        console.log(
+            `Count ${count} Parallel jobs ${PARALLEL_JOBS} ${usedTime.toLocaleString()} milliseconds`
+        );
         startTime = 0;
         count = 0;
     }

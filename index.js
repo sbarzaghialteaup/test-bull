@@ -1,4 +1,5 @@
 const Queue = require("bull");
+const { log } = require("console");
 
 const os = require("os");
 
@@ -41,29 +42,50 @@ function calculateUsedCPU(usedTime) {
     return totalCpu / CPUsUsage.length;
 }
 
-async function main(PARALLEL_JOBS) {
+function start() {
+    console.log(`Counting up to ${job.data.count} with ${PARALLEL_JOBS} parallel jobs`);
+    startTimer();
+}
+
+function end() {
+    const usedTime = getSecondsFromStart();
+    endCpuUsage = os.cpus();
+    const avgCPU = calculateUsedCPU(usedTime);
+    console.log(
+        `Count ${count} Parallel jobs ${PARALLEL_JOBS} ${usedTime.toLocaleString()} milliseconds - CPU ${avgCPU}%`
+    );
+    startTime = 0;
+    count = 0;
+}
+
+async function main(PARALLEL_JOBS, useThreads) {
     console.log(`Number of logical CPUs: ${os.cpus().length}`);
     console.log(`CPU Speed: ${os.cpus()[0].speed}MHz`);
     console.log();
 
-    videoQueue.process(PARALLEL_JOBS, (job, done) => {
-        if (startTime === 0) {
-            console.log(`Counting up to ${job.data.count} with ${PARALLEL_JOBS} parallel jobs`);
-            startTimer();
-        }
-        count += 1;
-        done();
-        if (count === job.data.count) {
-            const usedTime = getSecondsFromStart();
-            endCpuUsage = os.cpus();
-            const avgCPU = calculateUsedCPU(usedTime);
-            console.log(
-                `Count ${count} Parallel jobs ${PARALLEL_JOBS} ${usedTime.toLocaleString()} milliseconds - CPU ${avgCPU}%`
-            );
-            startTime = 0;
-            count = 0;
-        }
-    });
+    if (useThreads === "x") {
+        videoQueue.process(PARALLEL_JOBS, "/home/sbarzaghi/test/test-bull/processor.js");
+
+        videoQueue.on("completed", (job, result) => {
+            if (result.started) {
+                start();
+            }
+            if (result.finished) {
+                end();
+            }
+        });
+    } else {
+        videoQueue.process(PARALLEL_JOBS, (job, done) => {
+            count += 1;
+            done();
+            if (startTime === 0) {
+                start();
+            }
+            if (count === job.data.count) {
+                end;
+            }
+        });
+    }
 }
 
-main(Number(process.argv[2]));
+main(Number(process.argv[2]), process.argv[3]);

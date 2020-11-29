@@ -77,11 +77,13 @@ async function main(PARALLEL_JOBS, useThreads) {
             }
             if (result.finished) {
                 count = job.data.count;
+                console.log("ARRIVATO", new Date());
                 end(PARALLEL_JOBS);
             }
         });
     } else {
         videoQueue.process(PARALLEL_JOBS, (job, done) => {
+            for (let index = 0; index < 2000000; index++) {}
             count += 1;
             done();
             if (startTime === 0) {

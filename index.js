@@ -7,18 +7,34 @@ const options = {
     },
 };
 const videoQueue = new Queue("video transcoding");
+let startTime = 0;
+let count = 0;
 
-videoQueue.process(5, (job, done) => {
-    console.log(`done ${job.data.index}`);
+function startTimer() {
+    startTime = new Date();
+}
+
+function getSecondsFromStart() {
+    const now = new Date();
+    return now - startTime;
+}
+
+videoQueue.process(8, (job, done) => {
+    // console.log(`done ${job.data.index}`);
+    if (startTime === 0) {
+        startTimer();
+    }
+    count += 1;
     done();
 });
 
-async function main() {
-    // for (let index = 0; index < 100000; index++) {
-    //     // eslint-disable-next-line no-await-in-loop
-    //     videoQueue.add({ video: "http://example.com/video1.mov", index });
-    // }
-    // console.log("Jobs Aggiunti");
-}
-
-main();
+// Will listen globally, to instances of this queue...
+videoQueue.on("global:drained", async () => {
+    const delayed = await videoQueue.getDelayedCount();
+    if (startTime > 0 && delayed === 0) {
+        const usedTime = getSecondsFromStart();
+        console.log(`Count ${count} ${usedTime.toLocaleString()} milliseconds`);
+        startTime = 0;
+        count = 0;
+    }
+});

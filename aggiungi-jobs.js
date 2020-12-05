@@ -113,21 +113,29 @@ function processJob(job, done) {
     setTimeout(() => {
         console.log("Processato job", job.data.jobName, (counter += 1));
         done();
-    }, 5000);
+    }, 50);
 }
 
 async function main() {
     try {
         await initExpress();
         for (let index = 0; index < 100; index++) {
-            const customerName = `cliente-${index}`;
+            let customerName = `cliente-${index}-handlingMoved`;
+            // eslint-disable-next-line no-await-in-loop
+            videoQueues.set(customerName, await createQueue(customerName));
+
+            customerName = `cliente-${index}-residentTimes`;
+            // eslint-disable-next-line no-await-in-loop
+            videoQueues.set(customerName, await createQueue(customerName));
+
+            customerName = `cliente-${index}-alarms`;
             // eslint-disable-next-line no-await-in-loop
             videoQueues.set(customerName, await createQueue(customerName));
         }
 
         // eslint-disable-next-line no-restricted-syntax
         for (const videoQueue of videoQueues.values()) {
-            videoQueue.process(5, processJob);
+            videoQueue.process(20, processJob);
         }
     } catch (error) {
         console.error("Errore-------", error);

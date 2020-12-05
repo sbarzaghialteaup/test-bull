@@ -10,7 +10,15 @@ const videoQueues = new Map();
 
 async function main() {
     for (let index = 0; index < 100; index++) {
-        const customerName = `cliente-${index}`;
+        let customerName = `cliente-${index}-handlingMoved`;
+        // eslint-disable-next-line no-await-in-loop
+        videoQueues.set(customerName, new Queue(customerName));
+
+        customerName = `cliente-${index}-residentTimes`;
+        // eslint-disable-next-line no-await-in-loop
+        videoQueues.set(customerName, new Queue(customerName));
+
+        customerName = `cliente-${index}-alarms`;
         // eslint-disable-next-line no-await-in-loop
         videoQueues.set(customerName, new Queue(customerName));
     }

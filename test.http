@@ -1,5 +1,8 @@
 GET http://localhost:8089/addJob/{{$guid}} HTTP/1.1
 
 ###
-
 GET http://localhost:8089/connect HTTP/1.1
+###
+GET http://localhost:8089/pause HTTP/1.1
+###
+GET http://localhost:8089/resume HTTP/1.1

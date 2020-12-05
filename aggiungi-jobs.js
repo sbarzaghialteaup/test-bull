@@ -4,33 +4,44 @@ const bodyParser = require("body-parser");
 const PORT = process.env.PORT || 8089;
 
 const Queue = require("bull");
-const reconnectRedisNow = false;
 
-const videoQueue = new Queue("sam", {
-    redis: {
-        enableOfflineQueue: false,
-        retryStrategy(times) {
-            const maxMilliseconds = 1000 * 60 * 2;
-            const randomWait = Math.floor(Math.random() * 1000);
+let videoQueue;
 
-            const delay = Math.min(times * 50000 + randomWait, maxMilliseconds);
-            console.log(` Reconnecting after ${delay} milliseconds`);
-
-            return delay;
+function syncCreateQueue(resolve, reject) {
+    const internalVideoQueue = new Queue("sam", {
+        limiter: {
+            max: 1000,
+            duration: 1000,
+            bounceBack: false,
+            prefix: "ccc",
         },
-    },
-});
+        redis: {
+            // enableOfflineQueue: false,
+            retryStrategy(times) {
+                const maxMilliseconds = 1000 * 60 * 2;
+                const randomWait = Math.floor(Math.random() * 1000);
+
+                const delay = Math.min(times * 50000 + randomWait, maxMilliseconds);
+                console.log(` Reconnecting after ${delay} milliseconds`);
+
+                return delay;
+            },
+        },
+    });
+
+    internalVideoQueue.client.on("ready", () => {
+        console.log("Connesso a redis");
+        resolve(internalVideoQueue);
+    });
+
+    internalVideoQueue.client.on("error", (error) => {
+        console.log("Disconnesso da redis", error);
+        reject(error);
+    });
+}
 
 function createQueue() {
-    videoQueue.client.on("ready", () => {
-        console.log("Connesso a redis");
-    });
-
-    videoQueue.client.on("error", (error) => {
-        console.log("Disconnesso da redis", error);
-    });
-
-    return videoQueue;
+    return new Promise(syncCreateQueue);
 }
 
 async function addJob(req, res) {
@@ -38,21 +49,30 @@ async function addJob(req, res) {
 
     if (videoQueue.client.status !== "ready") {
         console.log("Lo stato di redis è", videoQueue.client.status);
+        res.status(500).send({ error: "Non è possibile aggiungere job in questo momento" });
     }
 
     try {
-        const job = await videoQueue.add({
-            video: "http://example.com/video1.mov",
-            index: 1,
-            count: 1,
-            jobName: req.params.jobName,
-        });
-        res.type("json").send(JSON.stringify(job));
+        const job = await videoQueue.add(
+            {
+                video: "http://example.com/video1.mov",
+                index: 1,
+                count: 1,
+                jobName: req.params.jobName,
+            },
+            { removeOnComplete: 1000 }
+        );
+        try {
+            res.type("json").send(JSON.stringify(job));
+        } catch (_error) {
+            return;
+        }
         console.log("Aggiunto job", job.id);
     } catch (error) {
         console.log("Aggiunta di job rifiutata", error);
-        console.log(videoQueue);
-        res.status(500).send({ error: "Non è possibile aggiungere job in questo momento" });
+        try {
+            res.status(500).send({ error: "Non è possibile aggiungere job in questo momento" });
+        } catch (_error) {}
     }
 }
 
@@ -60,8 +80,17 @@ async function initExpress() {
     const app = express();
     app.use(bodyParser.json());
 
-    app.get("/connect", (_req, _res) => {
+    app.get("/connect", (_req, res) => {
         videoQueue.client.connect();
+        res.type("json").send(JSON.stringify(videoQueue.client.status));
+    });
+    app.get("/pause", (_req, res) => {
+        videoQueue.pause();
+        res.type("json").send("pausing...");
+    });
+    app.get("/resume", (_req, res) => {
+        videoQueue.resume();
+        res.type("json").send("resume...");
     });
     app.get("/addJob/:jobName", addJob);
 
@@ -73,23 +102,21 @@ async function initExpress() {
     });
 }
 
-async function addJobs(jobs) {
-    const promises = [];
-    for (let index = 0; index < jobs; index++) {
-        promises.push(
-            videoQueue.add({ video: "http://example.com/video1.mov", index, count: jobs })
-        );
-    }
-
-    const results = await Promise.allSettled(promises);
-    console.log(`Jobs Aggiunti ${jobs}`);
-}
 async function main() {
+    let counter = 0;
     try {
         await initExpress();
-        await createQueue();
+        videoQueue = await createQueue();
+
+        videoQueue.process(5, (job, done) => {
+            setTimeout(() => {
+                console.log("Processato job", job.data.jobName, (counter += 1));
+                done();
+            }, 5000);
+        });
     } catch (error) {
         console.error("Errore-------", error);
+        process.exit(4);
     }
 }
 

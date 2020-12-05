@@ -11,7 +11,7 @@ function createQueue(customerName) {
     return new Promise((resolve, reject) => {
         const internalVideoQueue = new Queue(customerName, {
             limiter: {
-                max: 1000,
+                max: 10000,
                 duration: 1000,
                 bounceBack: false,
                 prefix: "ccc",

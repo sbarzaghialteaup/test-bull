@@ -6,10 +6,19 @@ const { setQueues } = require("bull-board");
 
 const PORT = process.env.PORT || 8090;
 
-const videoQueue = new Queue("sam");
+const videoQueues = new Map();
 
 async function main() {
-    setQueues([videoQueue]);
+    for (let index = 0; index < 100; index++) {
+        const customerName = `cliente-${index}`;
+        // eslint-disable-next-line no-await-in-loop
+        videoQueues.set(customerName, new Queue(customerName));
+    }
+
+    // eslint-disable-next-line no-restricted-syntax
+    for (const videoQueue of videoQueues.values()) {
+        setQueues([videoQueue]);
+    }
 
     app.use("/", router);
 

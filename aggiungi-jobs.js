@@ -5,47 +5,47 @@ const PORT = process.env.PORT || 8089;
 
 const Queue = require("bull");
 
-let videoQueue;
+const videoQueues = new Map();
 
-function syncCreateQueue(resolve, reject) {
-    const internalVideoQueue = new Queue("sam", {
-        limiter: {
-            max: 1000,
-            duration: 1000,
-            bounceBack: false,
-            prefix: "ccc",
-        },
-        redis: {
-            // enableOfflineQueue: false,
-            retryStrategy(times) {
-                const maxMilliseconds = 1000 * 60 * 2;
-                const randomWait = Math.floor(Math.random() * 1000);
-
-                const delay = Math.min(times * 50000 + randomWait, maxMilliseconds);
-                console.log(` Reconnecting after ${delay} milliseconds`);
-
-                return delay;
+function createQueue(customerName) {
+    return new Promise((resolve, reject) => {
+        const internalVideoQueue = new Queue(customerName, {
+            limiter: {
+                max: 1000,
+                duration: 1000,
+                bounceBack: false,
+                prefix: "ccc",
             },
-        },
-    });
+            redis: {
+                // enableOfflineQueue: false,
+                retryStrategy(times) {
+                    const maxMilliseconds = 1000 * 60 * 2;
+                    const randomWait = Math.floor(Math.random() * 1000);
 
-    internalVideoQueue.client.on("ready", () => {
-        console.log("Connesso a redis");
-        resolve(internalVideoQueue);
-    });
+                    const delay = Math.min(times * 50000 + randomWait, maxMilliseconds);
+                    console.log(` Reconnecting after ${delay} milliseconds`);
 
-    internalVideoQueue.client.on("error", (error) => {
-        console.log("Disconnesso da redis", error);
-        reject(error);
-    });
-}
+                    return delay;
+                },
+            },
+        });
 
-function createQueue() {
-    return new Promise(syncCreateQueue);
+        internalVideoQueue.client.on("ready", () => {
+            console.log("Connesso a redis", customerName);
+            resolve(internalVideoQueue);
+        });
+
+        internalVideoQueue.client.on("error", (error) => {
+            console.log("Disconnesso da redis", customerName, error);
+            reject(error);
+        });
+    });
 }
 
 async function addJob(req, res) {
     console.log("Arrivata richiesta aggiunta job", req.params.jobName);
+
+    const videoQueue = videoQueues.get(req.params.jobName);
 
     if (videoQueue.client.status !== "ready") {
         console.log("Lo stato di redis è", videoQueue.client.status);
@@ -80,18 +80,24 @@ async function initExpress() {
     const app = express();
     app.use(bodyParser.json());
 
-    app.get("/connect", (_req, res) => {
+    app.get("/connect/:jobName", (req, res) => {
+        const videoQueue = videoQueues.get(req.params.jobName);
         videoQueue.client.connect();
         res.type("json").send(JSON.stringify(videoQueue.client.status));
     });
-    app.get("/pause", (_req, res) => {
+
+    app.get("/pause/:jobName", (req, res) => {
+        const videoQueue = videoQueues.get(req.params.jobName);
         videoQueue.pause();
-        res.type("json").send("pausing...");
+        res.type("json").send(JSON.stringify("pausing"));
     });
-    app.get("/resume", (_req, res) => {
+
+    app.get("/resume/:jobName", (req, res) => {
+        const videoQueue = videoQueues.get(req.params.jobName);
         videoQueue.resume();
-        res.type("json").send("resume...");
+        res.type("json").send(JSON.stringify("resume..."));
     });
+
     app.get("/addJob/:jobName", addJob);
 
     return new Promise((resolve, _reject) => {
@@ -102,18 +108,27 @@ async function initExpress() {
     });
 }
 
-async function main() {
+function processJob(job, done) {
     let counter = 0;
+    setTimeout(() => {
+        console.log("Processato job", job.data.jobName, (counter += 1));
+        done();
+    }, 5000);
+}
+
+async function main() {
     try {
         await initExpress();
-        videoQueue = await createQueue();
+        for (let index = 0; index < 100; index++) {
+            const customerName = `cliente-${index}`;
+            // eslint-disable-next-line no-await-in-loop
+            videoQueues.set(customerName, await createQueue(customerName));
+        }
 
-        videoQueue.process(5, (job, done) => {
-            setTimeout(() => {
-                console.log("Processato job", job.data.jobName, (counter += 1));
-                done();
-            }, 5000);
-        });
+        // eslint-disable-next-line no-restricted-syntax
+        for (const videoQueue of videoQueues.values()) {
+            videoQueue.process(5, processJob);
+        }
     } catch (error) {
         console.error("Errore-------", error);
         process.exit(4);

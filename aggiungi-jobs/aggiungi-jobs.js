@@ -13,7 +13,7 @@ function createQueue(customerName) {
     return new Promise((resolve, reject) => {
         const internalVideoQueue = new Queue(customerName, {
             limiter: {
-                max: 100,
+                max: 5000,
                 duration: 1000,
                 bounceBack: true,
                 prefix: "ccc",
@@ -57,7 +57,7 @@ async function addJob(req, res) {
     }
 
     try {
-        const job = await videoQueue.add(
+        const job = videoQueue.add(
             {
                 video: "http://example.com/video1.mov",
                 index: 1,
@@ -117,7 +117,7 @@ function processJob(job, done) {
     setTimeout(() => {
         console.log("Processato job", job.data.jobName, (counter += 1));
         done();
-    }, 50);
+    }, 5);
 }
 
 async function main() {

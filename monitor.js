@@ -24,9 +24,7 @@ async function main() {
     }
 
     // eslint-disable-next-line no-restricted-syntax
-    for (const videoQueue of videoQueues.values()) {
-        setQueues([videoQueue]);
-    }
+    setQueues(Array.from(videoQueues.values()));
 
     app.use("/", router);
 

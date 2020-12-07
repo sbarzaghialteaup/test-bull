@@ -2,6 +2,8 @@ const express = require("express");
 const bodyParser = require("body-parser");
 
 const PORT = process.env.PORT || 8089;
+const REDIS_HOST = process.env.REDIS_HOST || "127.0.0.1";
+const REDIS_PORT = process.env.REDIS_PORT || "6379";
 
 const Queue = require("bull");
 
@@ -11,12 +13,14 @@ function createQueue(customerName) {
     return new Promise((resolve, reject) => {
         const internalVideoQueue = new Queue(customerName, {
             limiter: {
-                max: 10000,
+                max: 5000,
                 duration: 1000,
-                bounceBack: false,
+                bounceBack: true,
                 prefix: "ccc",
             },
             redis: {
+                host: REDIS_HOST,
+                port: REDIS_PORT,
                 // enableOfflineQueue: false,
                 retryStrategy(times) {
                     const maxMilliseconds = 1000 * 60 * 2;
@@ -53,7 +57,7 @@ async function addJob(req, res) {
     }
 
     try {
-        const job = await videoQueue.add(
+        const job = videoQueue.add(
             {
                 video: "http://example.com/video1.mov",
                 index: 1,
@@ -113,10 +117,12 @@ function processJob(job, done) {
     setTimeout(() => {
         console.log("Processato job", job.data.jobName, (counter += 1));
         done();
-    }, 50);
+    }, 5);
 }
 
 async function main() {
+    console.log(`REDIS: ${REDIS_HOST} ${REDIS_PORT}`);
+
     try {
         await initExpress();
         for (let index = 0; index < 100; index++) {

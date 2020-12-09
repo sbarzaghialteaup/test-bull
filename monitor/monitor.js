@@ -23,6 +23,9 @@ async function main() {
         videoQueues.set(customerName, new Queue(customerName));
     }
 
+    let customerName = 'customera-residence-time';
+    videoQueues.set(customerName, new Queue(customerName));
+
     // eslint-disable-next-line no-restricted-syntax
     setQueues(Array.from(videoQueues.values()));
 
